@@ -36,7 +36,6 @@ class ForkUpdateAgentStack(Stack):
             "GitHubTokenParameter",
             parameter_name="/fork-update-agent/github/token",
             string_value="REPLACE_ME",
-            parameter_type=ssm.ParameterType.SECURE_STRING,
             description="GitHub token (PAT) used to query upstream releases.",
         )
 
@@ -64,8 +63,8 @@ class ForkUpdateAgentStack(Stack):
             "CODEBUILD_PROJECT_DEPLOY": self.node.try_get_context("deploy_project") or "fork-update-deploy",
             "SMOKE_TEST_BUCKET": self.node.try_get_context("smoke_test_bucket") or "",
             "SMOKE_TEST_KEY": self.node.try_get_context("smoke_test_key") or "fixtures/sample-invoice.pdf",
-            "UPSTREAM_OWNER": self.node.try_get_context("upstream_owner") or "aws",
-            "UPSTREAM_REPO": self.node.try_get_context("upstream_repo") or "idp_common",
+            "UPSTREAM_OWNER": self.node.try_get_context("upstream_owner") or "aws-solutions-library-samples",
+            "UPSTREAM_REPO": self.node.try_get_context("upstream_repo") or "accelerated-intelligent-document-processing-on-aws",
             "FORK_REPO": self.node.try_get_context("fork_repo") or "ricoh/idp_common",
         }
 

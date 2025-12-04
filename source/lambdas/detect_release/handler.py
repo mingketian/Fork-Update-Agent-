@@ -61,7 +61,11 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     token = None
     if token_param:
         try:
-            token = _get_parameter(token_param, decrypt=True)
+            raw_token = _get_parameter(token_param, decrypt=True)
+            if raw_token and raw_token != "REPLACE_ME":
+                token = raw_token
+            else:
+                LOGGER.info("GitHub token is placeholder. Continuing without auth.")
         except SSM.exceptions.ParameterNotFound:
             LOGGER.warning("GitHub token parameter %s not found. Continuing without auth.", token_param)
 
