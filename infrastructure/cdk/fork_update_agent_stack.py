@@ -59,8 +59,6 @@ class ForkUpdateAgentStack(Stack):
             "SNS_TOPIC_ARN": notification_topic.topic_arn,
             "SMOKE_TEST_STEP_FUNCTION": self.node.try_get_context("smoke_test_step_function_arn") or "",
             "SANDBOX_STACK_NAME": self.node.try_get_context("sandbox_root_stack") or "IDP-ACCELERATOR-TEST-2",
-            "CODEBUILD_PROJECT_MERGE": self.node.try_get_context("merge_build_project") or "fork-update-merge-build",
-            "CODEBUILD_PROJECT_DEPLOY": self.node.try_get_context("deploy_project") or "fork-update-deploy",
             "SMOKE_TEST_BUCKET": self.node.try_get_context("smoke_test_bucket") or "",
             "SMOKE_TEST_KEY": self.node.try_get_context("smoke_test_key") or "fixtures/sample-invoice.pdf",
             "UPSTREAM_OWNER": self.node.try_get_context("upstream_owner") or "aws-solutions-library-samples",
@@ -101,20 +99,16 @@ class ForkUpdateAgentStack(Stack):
             environment=lambda_common_env,
         )
 
+        # Grant SSM parameter access
         github_token_param.grant_read(detect_release_fn)
         current_version_param.grant_read(detect_release_fn)
         current_version_param.grant_read(report_fn)
         current_version_param.grant_write(report_fn)
+        current_version_param.grant_write(deploy_fn)  # Needs to update version after deployment
 
+        # Grant SNS publish permission
         notification_topic.grant_publish(report_fn)
-
-        for fn in [prepare_merge_fn, deploy_fn, smoke_test_fn]:
-            fn.add_to_role_policy(
-                iam.PolicyStatement(
-                    actions=["codebuild:StartBuild", "codebuild:BatchGetBuilds"],
-                    resources=["*"],
-                )
-            )
+        notification_topic.grant_publish(prepare_merge_fn)  # Sends notifications about new releases
 
         smoke_test_fn.add_to_role_policy(
             iam.PolicyStatement(
@@ -127,10 +121,12 @@ class ForkUpdateAgentStack(Stack):
             )
         )
 
+        # Grant CloudFormation permissions to deploy_fn for stack updates
         deploy_fn.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
                     "cloudformation:DescribeStacks",
+                    "cloudformation:DescribeStackEvents",
                     "cloudformation:UpdateStack",
                     "cloudformation:CreateChangeSet",
                     "cloudformation:ExecuteChangeSet",
@@ -157,6 +153,7 @@ class ForkUpdateAgentStack(Stack):
                 {
                     "upstream_version.$": "$.detect.upstream_version",
                     "release_url.$": "$.detect.release_url",
+                    "release_notes.$": "$.detect.release_notes",
                 }
             ),
             result_path="$.merge",
@@ -169,8 +166,8 @@ class ForkUpdateAgentStack(Stack):
             lambda_function=deploy_fn,
             payload=sfn.TaskInput.from_object(
                 {
-                    "artifact_id.$": "$.merge.artifact_id",
                     "upstream_version.$": "$.merge.upstream_version",
+                    "pr_url.$": "$.merge.pr_url",
                 }
             ),
             result_path="$.deploy",
@@ -184,7 +181,7 @@ class ForkUpdateAgentStack(Stack):
             payload=sfn.TaskInput.from_object(
                 {
                     "upstream_version.$": "$.deploy.upstream_version",
-                    "execution_id.$": "$.deploy.execution_id",
+                    "deployment_status.$": "$.deploy.deployment_status",
                 }
             ),
             result_path="$.smoke",
